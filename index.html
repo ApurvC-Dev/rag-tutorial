@@ -1,0 +1,992 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>RAG Visualizer (Local, Interactive)</title>
+  <style>
+    :root{
+      --bg:#0b0f17;
+      --card:#101828;
+      --card2:#0f172a;
+      --muted:#94a3b8;
+      --text:#e5e7eb;
+      --accent:#60a5fa;
+      --accent2:#34d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+      --line:rgba(148,163,184,.18);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      background: radial-gradient(1200px 600px at 20% -10%, rgba(96,165,250,.25), transparent 55%),
+                  radial-gradient(1200px 700px at 120% 20%, rgba(52,211,153,.20), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+    }
+    header{
+      padding:24px 18px 8px;
+      max-width:1200px;
+      margin:0 auto;
+      display:flex;
+      gap:14px;
+      align-items:flex-start;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+    .title{
+      display:flex; flex-direction:column; gap:6px;
+    }
+    .title h1{
+      margin:0;
+      font-size:20px;
+      letter-spacing:.2px;
+      font-weight:700;
+    }
+    .title p{
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
+      max-width:720px;
+      line-height:1.45;
+    }
+    .pillRow{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    .pill{
+      font-size:12px;
+      padding:8px 10px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      border-radius:999px;
+      color:var(--muted);
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .pill strong{color:var(--text); font-weight:600}
+    .container{
+      max-width:1200px;
+      margin:0 auto;
+      padding:12px 18px 40px;
+      display:grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap:14px;
+    }
+    @media (max-width: 980px){
+      .container{grid-template-columns:1fr}
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .cardHeader{
+      padding:14px 14px 10px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+    }
+    .cardHeader h2{
+      margin:0;
+      font-size:14px;
+      font-weight:700;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .stepBadge{
+      width:28px; height:28px;
+      border-radius:10px;
+      display:grid; place-items:center;
+      background:rgba(96,165,250,.15);
+      border:1px solid rgba(96,165,250,.25);
+      color:var(--accent);
+      font-weight:800;
+      font-size:12px;
+    }
+    .cardBody{padding:14px}
+    .row{display:flex; gap:10px; flex-wrap:wrap}
+    .row > * {flex:1}
+    label{
+      font-size:12px;
+      color:var(--muted);
+      display:block;
+      margin-bottom:6px;
+    }
+    input[type="number"], input[type="text"], textarea, select{
+      width:100%;
+      background: rgba(15,23,42,.7);
+      color: var(--text);
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 10px;
+      outline:none;
+      font-size:13px;
+    }
+    textarea{min-height:140px; resize:vertical; line-height:1.4}
+    .btnRow{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px}
+    button{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.05);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:600;
+      font-size:13px;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      transition: transform .04s ease, background .12s ease, border-color .12s ease;
+      user-select:none;
+    }
+    button:hover{background: rgba(255,255,255,.07); border-color: rgba(148,163,184,.35)}
+    button:active{transform: translateY(1px)}
+    button.primary{
+      background: rgba(96,165,250,.18);
+      border-color: rgba(96,165,250,.35);
+      color: #dbeafe;
+    }
+    button.good{
+      background: rgba(52,211,153,.18);
+      border-color: rgba(52,211,153,.35);
+      color: #d1fae5;
+    }
+    button.warn{
+      background: rgba(251,191,36,.14);
+      border-color: rgba(251,191,36,.30);
+      color: #fef3c7;
+    }
+    button.bad{
+      background: rgba(251,113,133,.12);
+      border-color: rgba(251,113,133,.30);
+      color: #ffe4e6;
+    }
+    .hint{
+      margin-top:10px;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.4;
+    }
+    .divider{height:1px;background:var(--line);margin:12px 0}
+    .small{
+      font-size:12px;color:var(--muted)
+    }
+    .mono{
+      font-family: var(--mono);
+      font-size:12px;
+      line-height:1.45;
+      color:#d1d5db;
+      background: rgba(2,6,23,.55);
+      border:1px solid var(--line);
+      border-radius: 14px;
+      padding:10px;
+      overflow:auto;
+      max-height:260px;
+      white-space:pre;
+    }
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .chunk{
+      border:1px solid var(--line);
+      background: rgba(2,6,23,.35);
+      border-radius: 14px;
+      padding:10px;
+    }
+    .chunkTop{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-start;
+    }
+    .chunkTitle{
+      display:flex; align-items:center; gap:8px;
+      font-weight:700; font-size:13px;
+    }
+    .chip{
+      font-size:11px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      color:var(--muted);
+      background: rgba(255,255,255,.03);
+      white-space:nowrap;
+    }
+    .chunkText{
+      margin-top:8px;
+      color:#e5e7eb;
+      font-size:13px;
+      line-height:1.45;
+      white-space:pre-wrap;
+    }
+    .chunkActions{
+      margin-top:10px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .hl{
+      background: rgba(96,165,250,.18);
+      border:1px solid rgba(96,165,250,.28);
+      padding:0 4px;
+      border-radius:6px;
+    }
+    .okDot{width:8px;height:8px;border-radius:999px;background:var(--accent2);display:inline-block}
+    .warnDot{width:8px;height:8px;border-radius:999px;background:var(--warn);display:inline-block}
+    .badDot{width:8px;height:8px;border-radius:999px;background:var(--bad);display:inline-block}
+    .statusLine{
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+      color:var(--muted); font-size:12px;
+    }
+    .rightSticky{
+      position:sticky;
+      top:12px;
+      align-self:start;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+    .kbd{
+      font-family:var(--mono);
+      font-size:11px;
+      padding:2px 6px;
+      border:1px solid var(--line);
+      border-bottom-color: rgba(148,163,184,.35);
+      border-radius:8px;
+      background: rgba(255,255,255,.03);
+      color:var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      <h1>RAG Visualizer (Local, Interactive)</h1>
+      <p>
+        Learn how Retrieval-Augmented Generation works step-by-step: chunking → embeddings → local vector store → top-N retrieval → augmented prompt → generation.
+        Everything runs <strong>locally</strong> in your browser using a simple deterministic embedding (hashing) for learning. Swap in a real embedding + LLM API later if you want.
+      </p>
+    </div>
+    <div class="pillRow">
+      <div class="pill"><span class="okDot"></span><strong>Local storage</strong> vectors persisted</div>
+      <div class="pill"><span class="warnDot"></span><strong>PDF</strong> upload asks for pasted text</div>
+      <div class="pill"><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> run query</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- LEFT COLUMN -->
+    <div class="left">
+      <!-- STEP 1 -->
+      <section class="card" id="step1">
+        <div class="cardHeader">
+          <h2><span class="stepBadge">1</span> Ingest text + set chunking</h2>
+          <div class="statusLine" id="s1status"><span class="warnDot"></span> Waiting for input</div>
+        </div>
+        <div class="cardBody">
+          <div class="row">
+            <div>
+              <label>Paste text</label>
+              <textarea id="inputText" placeholder="Paste any text here…"></textarea>
+              <div class="hint">Tip: Use any article, notes, or product doc. This tool is for learning the pipeline, not for perfect NLP.</div>
+            </div>
+            <div>
+              <label>Or upload a file (.txt recommended)</label>
+              <input id="fileInput" type="file" accept=".txt,.pdf" />
+              <div class="hint">
+                PDFs need a text extractor (usually a library). To keep this as a single-file offline app, PDF upload will prompt you to paste extracted text.
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="row">
+                <div>
+                  <label>Chunk size (words)</label>
+                  <input id="chunkSize" type="number" min="20" max="400" value="120"/>
+                </div>
+                <div>
+                  <label>Sliding window overlap (words)</label>
+                  <input id="overlap" type="number" min="0" max="200" value="30"/>
+                </div>
+              </div>
+
+              <div class="btnRow">
+                <button class="primary" id="chunkBtn">Chunk text</button>
+                <button id="clearAllBtn" class="bad">Clear everything</button>
+              </div>
+
+              <div class="hint">
+                Chunking uses a sliding window: next chunk starts at <span class="kbd">chunkSize - overlap</span>.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 2 + 3 -->
+      <section class="card" id="step2">
+        <div class="cardHeader">
+          <h2><span class="stepBadge">2</span> Chunks + create embeddings</h2>
+          <div class="statusLine" id="s2status"><span class="warnDot"></span> No chunks yet</div>
+        </div>
+        <div class="cardBody">
+          <div class="btnRow">
+            <button class="good" id="embedBtn">Create vector embeddings</button>
+            <button class="warn" id="saveBtn">Save vectors locally</button>
+            <button id="loadBtn">Load saved vectors</button>
+            <button id="deleteStoreBtn" class="bad">Delete saved store</button>
+          </div>
+
+          <div class="hint">
+            Embeddings here are a simple deterministic hashing vector (for learning). Retrieval uses cosine similarity. You can later replace embedding + LLM with real APIs.
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="row">
+            <div>
+              <label>Chunks (Step 2)</label>
+              <div class="list" id="chunksList"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 4 + 5 -->
+      <section class="card" id="step4">
+        <div class="cardHeader">
+          <h2><span class="stepBadge">4</span> Query + top-N retrieval</h2>
+          <div class="statusLine" id="s4status"><span class="warnDot"></span> Waiting for embeddings</div>
+        </div>
+        <div class="cardBody">
+          <div class="row">
+            <div>
+              <label>Ask a query</label>
+              <input id="queryInput" type="text" placeholder="e.g., What does the doc say about refunds and duplicates?" />
+              <div class="hint">Press <span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> to run.</div>
+            </div>
+            <div>
+              <label>Top N chunks</label>
+              <input id="topN" type="number" min="1" max="10" value="3"/>
+              <label style="margin-top:10px;">Embedding dims (demo)</label>
+              <select id="dimsSelect">
+                <option value="64">64 dims (fast)</option>
+                <option value="128" selected>128 dims (balanced)</option>
+                <option value="256">256 dims (more detail)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="btnRow">
+            <button class="primary" id="retrieveBtn">Retrieve top-N</button>
+          </div>
+
+          <div class="divider"></div>
+
+          <label>Top-N retrieved chunks (Step 5)</label>
+          <div class="list" id="retrievedList"></div>
+        </div>
+      </section>
+
+      <!-- STEP 6 -->
+      <section class="card" id="step6">
+        <div class="cardHeader">
+          <h2><span class="stepBadge">6</span> Augmented prompt (system-generated)</h2>
+          <div class="statusLine" id="s6status"><span class="warnDot"></span> Retrieve chunks first</div>
+        </div>
+        <div class="cardBody">
+          <label>Augmented prompt</label>
+          <div class="mono" id="promptBox"></div>
+          <div class="btnRow">
+            <button id="copyPromptBtn">Copy prompt</button>
+          </div>
+          <div class="hint">
+            This is the “augment” step: the query + retrieved context become a single prompt for the generator.
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <aside class="rightSticky">
+      <!-- STEP 3: Embeddings viewer -->
+      <section class="card" id="step3">
+        <div class="cardHeader">
+          <h2><span class="stepBadge">3</span> Embeddings + store</h2>
+          <div class="statusLine" id="s3status"><span class="warnDot"></span> Not created</div>
+        </div>
+        <div class="cardBody">
+          <div class="small">Selected chunk embedding preview (first 16 dims):</div>
+          <div class="mono" id="embedPreview">Select a chunk and click “Show embedding”.</div>
+
+          <div class="divider"></div>
+
+          <div class="small">Local vector store status:</div>
+          <div class="mono" id="storeStatus"></div>
+
+          <div class="hint">
+            Saved to <span class="kbd">localStorage</span> on your machine. No server. No magic. Just you and your browser.
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 7: Generation -->
+      <section class="card" id="step7">
+        <div class="cardHeader">
+          <h2><span class="stepBadge">7</span> Generate final answer</h2>
+          <div class="statusLine" id="s7status"><span class="warnDot"></span> Waiting for prompt</div>
+        </div>
+        <div class="cardBody">
+          <div class="row">
+            <div>
+              <label>Generation style</label>
+              <select id="genStyle">
+                <option value="concise" selected>Concise (cites chunks)</option>
+                <option value="detailed">Detailed (cites chunks)</option>
+                <option value="bullet">Bullet summary (cites chunks)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="btnRow">
+            <button class="good" id="generateBtn">Generate (Mock LLM)</button>
+          </div>
+
+          <div class="divider"></div>
+
+          <label>Final output</label>
+          <div class="mono" id="finalOutput"></div>
+          <div class="hint">
+            This is a local “mock LLM” that produces an answer using retrieved chunks + a simple summarizer. Swap in a real LLM API later if you want.
+          </div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    // ---------------------------
+    // State
+    // ---------------------------
+    const STORE_KEY = "rag_visualizer_store_v1";
+
+    let state = {
+      rawText: "",
+      chunks: [],         // [{id, text, startWord, endWord}]
+      embeddings: [],     // array aligned with chunks: Float32Array
+      dims: 128,
+      retrieved: [],      // [{chunk, score}]
+      augmentedPrompt: ""
+    };
+
+    // ---------------------------
+    // DOM helpers
+    // ---------------------------
+    const $ = (id) => document.getElementById(id);
+
+    function setStatus(elId, kind, text){
+      const el = $(elId);
+      const dot = kind === "ok" ? "okDot" : (kind === "bad" ? "badDot" : "warnDot");
+      el.innerHTML = `<span class="${dot}"></span> ${escapeHtml(text)}`;
+    }
+
+    function escapeHtml(str){
+      return String(str)
+        .replaceAll("&","&amp;").replaceAll("<","&lt;")
+        .replaceAll(">","&gt;").replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
+
+    // ---------------------------
+    // Chunking
+    // ---------------------------
+    function tokenizeWords(text){
+      // Simple tokenizer: split on whitespace, keep words. Good enough for learning.
+      return text
+        .replace(/\r\n/g, "\n")
+        .replace(/[ \t]+/g, " ")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    }
+
+    function chunkWords(words, chunkSize, overlap){
+      chunkSize = clamp(chunkSize, 10, 1000);
+      overlap = clamp(overlap, 0, chunkSize-1);
+      const step = Math.max(1, chunkSize - overlap);
+
+      const chunks = [];
+      let i = 0;
+      let id = 1;
+
+      while (i < words.length){
+        const slice = words.slice(i, i + chunkSize);
+        if (!slice.length) break;
+        chunks.push({
+          id,
+          text: slice.join(" "),
+          startWord: i,
+          endWord: i + slice.length - 1
+        });
+        id++;
+        i += step;
+      }
+      return chunks;
+    }
+
+    // ---------------------------
+    // Embeddings (Deterministic Hashing Vector)
+    // ---------------------------
+    // This is a lightweight "embedding" substitute for learning:
+    // - Hash tokens into a fixed-size vector
+    // - L2 normalize
+    function hashString(str){
+      // FNV-1a 32-bit
+      let h = 2166136261;
+      for (let i=0;i<str.length;i++){
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+
+    function embedText(text, dims){
+      const vec = new Float32Array(dims);
+      const tokens = text.toLowerCase().match(/[a-z0-9]+/g) || [];
+      for (const t of tokens){
+        const h = hashString(t);
+        const idx = h % dims;
+        // sign trick to spread: use another bit
+        const sign = ((h >>> 1) & 1) ? 1 : -1;
+        vec[idx] += sign * 1.0;
+      }
+      // L2 normalize
+      let norm = 0;
+      for (let i=0;i<dims;i++) norm += vec[i]*vec[i];
+      norm = Math.sqrt(norm) || 1;
+      for (let i=0;i<dims;i++) vec[i] /= norm;
+      return vec;
+    }
+
+    function cosineSim(a, b){
+      let s = 0;
+      const n = Math.min(a.length, b.length);
+      for (let i=0;i<n;i++) s += a[i]*b[i];
+      return s;
+    }
+
+    // ---------------------------
+    // Retrieval
+    // ---------------------------
+    function retrieveTopN(query, topN){
+      if (!state.embeddings.length) return [];
+      const qv = embedText(query, state.dims);
+      const scored = state.embeddings.map((ev, idx) => ({
+        chunk: state.chunks[idx],
+        score: cosineSim(qv, ev)
+      }));
+      scored.sort((a,b)=> b.score - a.score);
+      return scored.slice(0, topN);
+    }
+
+    // ---------------------------
+    // Prompt augmentation
+    // ---------------------------
+    function buildAugmentedPrompt(query, retrieved){
+      const context = retrieved.map((r, i) => {
+        const label = `Chunk ${r.chunk.id} (score: ${r.score.toFixed(3)})`;
+        return `${label}:\n${r.chunk.text}`;
+      }).join("\n\n---\n\n");
+
+      return `SYSTEM:
+You are a helpful assistant. Answer the USER question using ONLY the CONTEXT below.
+If the context does not contain the answer, say "I don't know based on the provided context."
+
+CONTEXT:
+${context || "[No retrieved context]"}
+
+USER QUESTION:
+${query}
+
+ASSISTANT ANSWER (grounded in context, cite chunk numbers when relevant):`;
+    }
+
+    // ---------------------------
+    // Mock "LLM" generator
+    // ---------------------------
+    function mockGenerateAnswer(query, retrieved, style){
+      if (!retrieved.length) return `I don't know based on the provided context. (No chunks retrieved.)`;
+
+      // Simple extraction/summarization: take top chunks, pick sentences that share tokens with query
+      const qTokens = new Set((query.toLowerCase().match(/[a-z0-9]+/g) || []).filter(t=>t.length>2));
+      const pickSentences = (text) => {
+        const sents = text.split(/(?<=[.!?])\s+/);
+        const scored = sents.map(s=>{
+          const tks = (s.toLowerCase().match(/[a-z0-9]+/g) || []);
+          let score = 0;
+          for (const t of tks) if (qTokens.has(t)) score++;
+          return {s, score};
+        }).sort((a,b)=>b.score-a.score);
+        return scored.filter(x=>x.score>0).slice(0, style==="detailed"?3:2).map(x=>x.s.trim());
+      };
+
+      const cited = retrieved.map(r=>{
+        const chosen = pickSentences(r.chunk.text);
+        return { id: r.chunk.id, score: r.score, chosen, raw: r.chunk.text };
+      });
+
+      const citations = cited.map(c=>`[Chunk ${c.id}]`).join(" ");
+
+      if (style === "bullet"){
+        const bullets = [];
+        for (const c of cited){
+          const lines = c.chosen.length ? c.chosen : [c.raw.slice(0, 160).trim()+"…"];
+          for (const line of lines){
+            bullets.push(`• ${line} (Chunk ${c.id})`);
+          }
+        }
+        return `Here’s what I found based on the retrieved context:\n\n${bullets.join("\n")}`;
+      }
+
+      if (style === "detailed"){
+        const paras = cited.map(c=>{
+          const lines = c.chosen.length ? c.chosen : [c.raw.slice(0, 220).trim()+"…"];
+          return `${lines.join(" ")} (Chunk ${c.id})`;
+        }).join("\n\n");
+        return `${paras}\n\nCitations: ${citations}`;
+      }
+
+      // concise
+      const top = cited[0];
+      const lines = top.chosen.length ? top.chosen : [top.raw.slice(0, 220).trim()+"…"];
+      return `${lines.join(" ")} (Chunk ${top.id})\n\nCitations: ${citations}`;
+    }
+
+    // ---------------------------
+    // Render chunks & retrieval
+    // ---------------------------
+    function renderChunks(){
+      const list = $("chunksList");
+      list.innerHTML = "";
+
+      if (!state.chunks.length){
+        setStatus("s2status", "warn", "No chunks yet");
+        return;
+      }
+      setStatus("s2status", "ok", `${state.chunks.length} chunks created`);
+      setStatus("s1status", "ok", "Text ingested");
+
+      state.chunks.forEach((c, idx)=>{
+        const div = document.createElement("div");
+        div.className = "chunk";
+
+        const words = c.text.split(/\s+/).length;
+        const hasEmbed = !!state.embeddings[idx];
+
+        div.innerHTML = `
+          <div class="chunkTop">
+            <div class="chunkTitle">
+              <span class="chip">Chunk #${c.id}</span>
+              <span class="chip">${words} words</span>
+              <span class="chip">words ${c.startWord}–${c.endWord}</span>
+              ${hasEmbed ? `<span class="chip" style="border-color: rgba(52,211,153,.35); color:#a7f3d0;">Embedded</span>` :
+                          `<span class="chip" style="border-color: rgba(251,191,36,.35); color:#fde68a;">No embedding</span>`}
+            </div>
+            <span class="chip">index ${idx}</span>
+          </div>
+          <div class="chunkText">${escapeHtml(c.text)}</div>
+          <div class="chunkActions">
+            <button data-idx="${idx}" class="showEmbedBtn">Show embedding</button>
+            <button data-idx="${idx}" class="copyChunkBtn">Copy chunk</button>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+
+      // bind
+      document.querySelectorAll(".showEmbedBtn").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const idx = Number(btn.dataset.idx);
+          if (!state.embeddings[idx]){
+            $("embedPreview").textContent = "No embedding yet. Click “Create vector embeddings”.";
+            return;
+          }
+          const v = state.embeddings[idx];
+          const preview = Array.from(v.slice(0,16)).map(n=>Number(n).toFixed(3)).join(", ");
+          $("embedPreview").textContent =
+            `Chunk #${state.chunks[idx].id} embedding preview (first 16 dims of ${state.dims}):\n[${preview}]\n\nTip: these are normalized floats; retrieval uses cosine similarity.`;
+          setStatus("s3status", "ok", "Embeddings available");
+        });
+      });
+      document.querySelectorAll(".copyChunkBtn").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const idx = Number(btn.dataset.idx);
+          await navigator.clipboard.writeText(state.chunks[idx].text);
+          btn.textContent = "Copied";
+          setTimeout(()=> btn.textContent="Copy chunk", 900);
+        });
+      });
+    }
+
+    function renderRetrieved(){
+      const list = $("retrievedList");
+      list.innerHTML = "";
+      if (!state.retrieved.length){
+        setStatus("s4status","warn","No retrieval results yet");
+        setStatus("s6status","warn","Retrieve chunks first");
+        $("promptBox").textContent = "";
+        return;
+      }
+      setStatus("s4status","ok",`Retrieved top ${state.retrieved.length} chunks`);
+      setStatus("s6status","ok","Augmented prompt ready");
+      setStatus("s7status","ok","Ready to generate");
+
+      state.retrieved.forEach((r, rank)=>{
+        const div = document.createElement("div");
+        div.className = "chunk";
+        const highlighted = highlightQueryTerms(r.chunk.text, $("queryInput").value);
+        div.innerHTML = `
+          <div class="chunkTop">
+            <div class="chunkTitle">
+              <span class="chip" style="border-color: rgba(96,165,250,.35); color:#bfdbfe;">Rank ${rank+1}</span>
+              <span class="chip">Chunk #${r.chunk.id}</span>
+              <span class="chip">score ${r.score.toFixed(3)}</span>
+            </div>
+            <span class="chip">words ${r.chunk.startWord}–${r.chunk.endWord}</span>
+          </div>
+          <div class="chunkText">${highlighted}</div>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    function highlightQueryTerms(text, query){
+      const tokens = (query.toLowerCase().match(/[a-z0-9]+/g) || [])
+        .filter(t=>t.length>2)
+        .slice(0, 20);
+      if (!tokens.length) return escapeHtml(text);
+
+      // naive highlighter: replace whole-word occurrences
+      let safe = escapeHtml(text);
+      for (const t of Array.from(new Set(tokens))){
+        const re = new RegExp(`\\b(${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\b`, "gi");
+        safe = safe.replace(re, `<span class="hl">$1</span>`);
+      }
+      return safe;
+    }
+
+    // ---------------------------
+    // Local storage
+    // ---------------------------
+    function storeStatus(){
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw){
+        $("storeStatus").textContent = "No saved vector store found.";
+        return;
+      }
+      try{
+        const obj = JSON.parse(raw);
+        $("storeStatus").textContent =
+`Saved store found:
+- chunks: ${obj.chunks?.length ?? 0}
+- dims: ${obj.dims ?? "?"}
+- savedAt: ${obj.savedAt ?? "?"}
+
+Tip: You can load it to skip chunking/embedding.`;
+      }catch{
+        $("storeStatus").textContent = "Saved store is corrupted or unreadable.";
+      }
+    }
+
+    function saveStore(){
+      if (!state.chunks.length || !state.embeddings.length){
+        alert("Nothing to save. Create chunks and embeddings first.");
+        return;
+      }
+      const payload = {
+        savedAt: new Date().toISOString(),
+        dims: state.dims,
+        chunks: state.chunks,
+        // store embeddings as regular arrays for JSON
+        embeddings: state.embeddings.map(v => Array.from(v))
+      };
+      localStorage.setItem(STORE_KEY, JSON.stringify(payload));
+      storeStatus();
+      setStatus("s3status","ok","Saved locally");
+    }
+
+    function loadStore(){
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw){ alert("No saved store found."); return; }
+      try{
+        const obj = JSON.parse(raw);
+        state.dims = obj.dims || state.dims;
+        $("dimsSelect").value = String(state.dims);
+        state.chunks = obj.chunks || [];
+        state.embeddings = (obj.embeddings || []).map(arr => {
+          const v = new Float32Array(state.dims);
+          for (let i=0;i<Math.min(arr.length, state.dims);i++) v[i] = arr[i];
+          return v;
+        });
+        renderChunks();
+        setStatus("s3status","ok",`Loaded ${state.chunks.length} chunks + embeddings`);
+        setStatus("s4status","ok","Ready for queries");
+        storeStatus();
+      }catch(e){
+        console.error(e);
+        alert("Failed to load store (corrupt JSON).");
+      }
+    }
+
+    function deleteStore(){
+      localStorage.removeItem(STORE_KEY);
+      storeStatus();
+      setStatus("s3status","warn","Store deleted");
+    }
+
+    // ---------------------------
+    // Wiring UI events
+    // ---------------------------
+    $("fileInput").addEventListener("change", async (e)=>{
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const name = file.name.toLowerCase();
+      if (name.endsWith(".pdf")){
+        alert("PDF text extraction isn't supported in this single-file offline demo. Please use any PDF-to-text tool and paste the extracted text into the textarea.");
+        return;
+      }
+
+      const text = await file.text();
+      $("inputText").value = text;
+      setStatus("s1status","ok","Loaded text from file");
+    });
+
+    $("chunkBtn").addEventListener("click", ()=>{
+      const text = $("inputText").value.trim();
+      if (!text){
+        alert("Paste some text first (or upload a .txt).");
+        return;
+      }
+      state.rawText = text;
+      const chunkSize = Number($("chunkSize").value);
+      const overlap = Number($("overlap").value);
+
+      const words = tokenizeWords(text);
+      if (words.length < 30){
+        alert("Text is very short. Paste a larger sample to see chunking + retrieval effects.");
+        return;
+      }
+      state.chunks = chunkWords(words, chunkSize, overlap);
+      state.embeddings = []; // reset
+      state.retrieved = [];
+      state.augmentedPrompt = "";
+      $("promptBox").textContent = "";
+      $("finalOutput").textContent = "";
+      $("embedPreview").textContent = "Select a chunk and click “Show embedding”.";
+      setStatus("s3status","warn","Not created");
+      setStatus("s4status","warn","Waiting for embeddings");
+      setStatus("s6status","warn","Retrieve chunks first");
+      setStatus("s7status","warn","Waiting for prompt");
+
+      renderChunks();
+    });
+
+    $("embedBtn").addEventListener("click", ()=>{
+      if (!state.chunks.length){
+        alert("Create chunks first.");
+        return;
+      }
+      state.dims = Number($("dimsSelect").value);
+      const embeddings = state.chunks.map(c => embedText(c.text, state.dims));
+      state.embeddings = embeddings;
+      setStatus("s3status","ok",`Created ${embeddings.length} embeddings (${state.dims} dims)`);
+      setStatus("s4status","ok","Ready for queries");
+      renderChunks();
+      storeStatus();
+    });
+
+    $("saveBtn").addEventListener("click", saveStore);
+    $("loadBtn").addEventListener("click", loadStore);
+    $("deleteStoreBtn").addEventListener("click", ()=>{
+      if (confirm("Delete the saved vector store from localStorage?")) deleteStore();
+    });
+
+    $("retrieveBtn").addEventListener("click", ()=>{
+      const query = $("queryInput").value.trim();
+      if (!query){ alert("Enter a query first."); return; }
+      if (!state.embeddings.length){ alert("Create embeddings first."); return; }
+
+      const topN = clamp(Number($("topN").value), 1, 10);
+      state.retrieved = retrieveTopN(query, topN);
+      state.augmentedPrompt = buildAugmentedPrompt(query, state.retrieved);
+
+      $("promptBox").textContent = state.augmentedPrompt;
+      renderRetrieved();
+    });
+
+    // Ctrl+Enter to retrieve
+    $("queryInput").addEventListener("keydown", (e)=>{
+      if (e.ctrlKey && e.key === "Enter") $("retrieveBtn").click();
+    });
+
+    $("copyPromptBtn").addEventListener("click", async ()=>{
+      const p = $("promptBox").textContent || "";
+      if (!p.trim()){ alert("No prompt yet. Retrieve chunks first."); return; }
+      await navigator.clipboard.writeText(p);
+      $("copyPromptBtn").textContent = "Copied";
+      setTimeout(()=> $("copyPromptBtn").textContent="Copy prompt", 900);
+    });
+
+    $("generateBtn").addEventListener("click", ()=>{
+      const query = $("queryInput").value.trim();
+      if (!query){ alert("Enter a query first."); return; }
+      if (!state.retrieved.length){ alert("Retrieve top-N chunks first."); return; }
+      const style = $("genStyle").value;
+      const ans = mockGenerateAnswer(query, state.retrieved, style);
+      $("finalOutput").textContent = ans;
+      setStatus("s7status","ok","Generated output");
+    });
+
+    $("clearAllBtn").addEventListener("click", ()=>{
+      if (!confirm("Clear text, chunks, embeddings, retrieval results (does not delete saved store unless you do it separately)?")) return;
+      $("inputText").value = "";
+      $("queryInput").value = "";
+      state = { rawText:"", chunks:[], embeddings:[], dims:Number($("dimsSelect").value), retrieved:[], augmentedPrompt:"" };
+      $("chunksList").innerHTML = "";
+      $("retrievedList").innerHTML = "";
+      $("promptBox").textContent = "";
+      $("finalOutput").textContent = "";
+      $("embedPreview").textContent = "Select a chunk and click “Show embedding”.";
+      setStatus("s1status","warn","Waiting for input");
+      setStatus("s2status","warn","No chunks yet");
+      setStatus("s3status","warn","Not created");
+      setStatus("s4status","warn","Waiting for embeddings");
+      setStatus("s6status","warn","Retrieve chunks first");
+      setStatus("s7status","warn","Waiting for prompt");
+    });
+
+    // init
+    storeStatus();
+    $("storeStatus").textContent = $("storeStatus").textContent || "No saved vector store found.";
+    $("promptBox").textContent = "";
+    $("finalOutput").textContent = "";
+  </script>
+</body>
+</html>
